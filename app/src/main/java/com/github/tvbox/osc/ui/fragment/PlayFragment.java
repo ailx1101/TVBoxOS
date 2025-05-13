@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -70,6 +71,7 @@ import com.github.tvbox.osc.util.MD5;
 import com.github.tvbox.osc.util.PlayerHelper;
 import com.github.tvbox.osc.util.VideoParseRuler;
 import com.github.tvbox.osc.util.XWalkUtils;
+import com.github.tvbox.osc.util.js.Crypto;
 import com.github.tvbox.osc.util.parser.SuperParse;
 import com.github.tvbox.osc.util.thunder.Jianpian;
 import com.github.tvbox.osc.util.thunder.Thunder;
@@ -1142,7 +1144,10 @@ public class PlayFragment extends BaseLazyFragment {
     private void doParse(ParseBean pb) {
         stopParse();
         initParseLoadFound();
-        if (pb.getType() == 4) {
+        if(pb.getType() == 5) {
+            parseMax(pb);
+        }
+        else if (pb.getType() == 4) {
             parseMix(pb,true);
         }
         else if (pb.getType() == 0) {
@@ -1294,6 +1299,60 @@ public class PlayFragment extends BaseLazyFragment {
         } else if (pb.getType() == 3) { // json 聚合
              parseMix(pb,false);
         }
+    }
+
+    private void parseMax(ParseBean pb){
+        HttpHeaders reqHeaders = new HttpHeaders();
+        OkGo.<String>get(pb.getUrl()+webUrl)
+                .tag("pares_max")
+                .headers(reqHeaders)
+                .execute(new AbsCallback<String>() {
+
+                    @Override
+                    public String convertResponse(okhttp3.Response response) throws Throwable {
+                        if (response.body() != null) {
+                            return response.body().string();
+                        } else {
+                            throw new IllegalStateException("网络请求错误");
+                        }
+                    }
+
+                    @Override
+                    public void onSuccess(Response<String> response) {
+                        String json = response.body();
+                        try {
+                            JSONObject jsonPlayData = new JSONObject(json);
+                            String rawUrlData = jsonPlayData.getString("url");
+                            Log.i("原始url",rawUrlData);
+                            if(rawUrlData.startsWith("https://baidu.con")){
+                                // 处理原始url
+                                String pUrl =handleRawUrl(rawUrlData);
+                                Log.i("解密播放地址",pUrl);
+                                if(pUrl.startsWith("http")){
+                                    HashMap<String, String> headers = new HashMap<String,String>();
+                                    headers.put("User-Agent", "okhttp/3.12.13");
+                                    playUrl(pUrl,headers);
+                                }else{
+                                    errorWithRetry("解析失败",true);
+
+                                }
+                            }else{
+                                errorWithRetry("解析失败",true);
+                            }
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                            errorWithRetry("解析错误", false);
+                        }
+
+                    }
+                });
+    }
+    private String handleRawUrl(String rawUrl){
+        System.out.println(rawUrl);
+        String url = rawUrl.replace("https://baidu.con/","");
+        String key = url.substring(0,16);
+        String content = url.substring(16);
+        return Crypto.aes("AES/CBC/PKCS5",false,content,true, key, key,false);
     }
 
     private void parseMix(ParseBean pb,boolean isSuper)
