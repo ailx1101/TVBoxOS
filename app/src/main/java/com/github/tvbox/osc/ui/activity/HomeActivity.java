@@ -177,28 +177,33 @@ public class HomeActivity extends BaseActivity {
                         JSONObject resultObj;
                         try {
                             resultObj =  new JSONObject(PrivateUtils.encode(text));
-                            JSONObject dataObj = resultObj.getJSONObject("data");
-                            JSONObject userInfoObj = dataObj.getJSONObject("userinfo");
-                            if(userInfoObj.getInt("vip")!=1){
-                                toRegister();
+                            if(resultObj.getInt("code")!=0){
+                                JSONObject dataObj = resultObj.getJSONObject("data");
+                                JSONObject userInfoObj = dataObj.getJSONObject("userinfo");
+                                if(userInfoObj.getInt("vip")!=1){
+                                    toRegister();
+                                }else{
+                                    saveLocal(userInfoObj.getString("username"),userInfoObj.getString("token"));
+                                }
                             }else{
-                                saveLocal(userInfoObj.getString("username"),userInfoObj.getString("token"));
+                                toRegister();
                             }
                         } catch (JSONException e) {
                             Toast.makeText(mContext,e.toString(),Toast.LENGTH_SHORT).show();
                             throw new RuntimeException(e);
                         }
+                        Toast.makeText(mContext,"登录成功",Toast.LENGTH_SHORT).show();
                     }
                 });
     }
 
     private void toRegister(){
         Toast.makeText(mContext,"去注册",Toast.LENGTH_SHORT).show();
-        String account = PrivateUtils.generateRandomString(9);
+        String account = PrivateUtils.generateRandomString(16);
         HttpHeaders reqHeaders = new HttpHeaders();
         OkGo.<String>post("http://47.108.190.232:666/api/users/register")
                 .params("password", "12345678")
-                .params("account", account)
+                .params("username", account)
                 .params("sign","a9f0f49eb9951d299ca25e90d4cb04f9dc80e838411d9c6ce5ddbd2f6f2a61b2")
                 .params("apk_mark", "lvdou-box-ui-6")
                 .params("app_id", "95210")
@@ -220,12 +225,16 @@ public class HomeActivity extends BaseActivity {
                         JSONObject resultObj;
                         try {
                             resultObj =  new JSONObject(PrivateUtils.encode(text));
-                            JSONObject dataObj = resultObj.getJSONObject("data");
-                            JSONObject userInfoObj = dataObj.getJSONObject("userinfo");
-                            if(userInfoObj.getInt("vip")!=1){
-                                toRegister();
+                            if(resultObj.getInt("code") !=0){
+                                JSONObject dataObj = resultObj.getJSONObject("data");
+                                JSONObject userInfoObj = dataObj.getJSONObject("userinfo");
+                                if(userInfoObj.getInt("vip")!=1){
+                                    toRegister();
+                                }else{
+                                    saveLocal(userInfoObj.getString("username"),userInfoObj.getString("token"));
+                                }
                             }else{
-                                saveLocal(userInfoObj.getString("username"),userInfoObj.getString("token"));
+                                Toast.makeText(mContext,"注册失败",Toast.LENGTH_SHORT).show();
                             }
                         } catch (JSONException e) {
                             Toast.makeText(mContext,e.toString(),Toast.LENGTH_SHORT).show();
