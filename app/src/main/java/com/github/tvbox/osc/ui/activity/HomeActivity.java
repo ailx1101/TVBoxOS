@@ -6,10 +6,12 @@ import android.animation.AnimatorSet;
 import android.animation.IntEvaluator;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
-import android.content.DialogInterface;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -31,6 +33,7 @@ import androidx.viewpager.widget.ViewPager;
 
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
+import com.github.tvbox.osc.base.App;
 import com.github.tvbox.osc.base.BaseActivity;
 import com.github.tvbox.osc.base.BaseLazyFragment;
 import com.github.tvbox.osc.bean.AbsSortXml;
@@ -56,7 +59,12 @@ import com.github.tvbox.osc.util.FileUtils;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.MD5;
+import com.github.tvbox.osc.util.PrivateUtils;
 import com.github.tvbox.osc.viewmodel.SourceViewModel;
+import com.lzy.okgo.OkGo;
+import com.lzy.okgo.callback.AbsCallback;
+import com.lzy.okgo.model.HttpHeaders;
+import com.lzy.okgo.model.Response;
 import com.orhanobut.hawk.Hawk;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
@@ -65,7 +73,8 @@ import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
-import org.jetbrains.annotations.NotNull;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -96,6 +105,7 @@ public class HomeActivity extends BaseActivity {
     public View sortFocusView = null;
     private final Handler mHandler = new Handler();
     private long mExitTime = 0;
+    SharedPreferences prefs  = App.getInstance().getSharedPreferences("WJYS1", Context.MODE_PRIVATE);
     private final Runnable mRunnable = new Runnable() {
         @SuppressLint({"DefaultLocale", "SetTextI18n"})
         @Override
@@ -128,7 +138,104 @@ public class HomeActivity extends BaseActivity {
             useCacheConfig = bundle.getBoolean("useCache", false);
         }
         initData();
+        //TODO 测试
+        login();
     }
+    private void saveLocal(String username,String token){
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString("username",username);
+        editor.putString("token",token);
+        editor.apply();
+    }
+
+    private void login(){
+        HttpHeaders reqHeaders = new HttpHeaders();
+        String username = prefs.getString("username","default");
+        String token = prefs.getString("token","default");
+        reqHeaders.put("token",token);
+        OkGo.<String>post("http://47.108.190.232:666/api/users/login")
+                .params("password", "12345678")
+                .params("account", username)
+                .params("sign","a9f0f49eb9951d299ca25e90d4cb04f9dc80e838411d9c6ce5ddbd2f6f2a61b2")
+                .params("apk_mark", "lvdou-box-ui-6")
+                .params("app_id", "95210")
+                .params("mark",username)
+                .tag("login_a")
+                .headers(reqHeaders)
+                .execute(new AbsCallback<String>() {
+                    @Override
+                    public String convertResponse(okhttp3.Response response) throws Throwable {
+                        if (response.body() != null) {
+                            return response.body().string();
+                        } else {
+                            throw new IllegalStateException("网络请求错误");
+                        }
+                    }
+
+                    public void onSuccess(Response response) {
+                        String text = response.body().toString();
+                        JSONObject resultObj;
+                        try {
+                            resultObj =  new JSONObject(PrivateUtils.encode(text));
+                            JSONObject dataObj = resultObj.getJSONObject("data");
+                            JSONObject userInfoObj = dataObj.getJSONObject("userinfo");
+                            if(userInfoObj.getInt("vip")!=1){
+                                toRegister();
+                            }else{
+                                saveLocal(userInfoObj.getString("username"),userInfoObj.getString("token"));
+                            }
+                        } catch (JSONException e) {
+                            Toast.makeText(mContext,e.toString(),Toast.LENGTH_SHORT).show();
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+    }
+
+    private void toRegister(){
+        Toast.makeText(mContext,"去注册",Toast.LENGTH_SHORT).show();
+        String account = PrivateUtils.generateRandomString(9);
+        HttpHeaders reqHeaders = new HttpHeaders();
+        OkGo.<String>post("http://47.108.190.232:666/api/users/register")
+                .params("password", "12345678")
+                .params("account", account)
+                .params("sign","a9f0f49eb9951d299ca25e90d4cb04f9dc80e838411d9c6ce5ddbd2f6f2a61b2")
+                .params("apk_mark", "lvdou-box-ui-6")
+                .params("app_id", "95210")
+                .params("mark",account)
+                .tag("register_a")
+                .headers(reqHeaders)
+                .execute(new AbsCallback<String>() {
+                    @Override
+                    public String convertResponse(okhttp3.Response response) throws Throwable {
+                        if (response.body() != null) {
+                            return response.body().string();
+                        } else {
+                            throw new IllegalStateException("网络请求错误");
+                        }
+                    }
+
+                    public void onSuccess(Response response) {
+                        String text = response.body().toString();
+                        JSONObject resultObj;
+                        try {
+                            resultObj =  new JSONObject(PrivateUtils.encode(text));
+                            JSONObject dataObj = resultObj.getJSONObject("data");
+                            JSONObject userInfoObj = dataObj.getJSONObject("userinfo");
+                            if(userInfoObj.getInt("vip")!=1){
+                                toRegister();
+                            }else{
+                                saveLocal(userInfoObj.getString("username"),userInfoObj.getString("token"));
+                            }
+                        } catch (JSONException e) {
+                            Toast.makeText(mContext,e.toString(),Toast.LENGTH_SHORT).show();
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
+    }
+
 
     private void initView() {
         this.topLayout = findViewById(R.id.topLayout);

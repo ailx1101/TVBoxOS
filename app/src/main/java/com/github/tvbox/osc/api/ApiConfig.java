@@ -3,9 +3,12 @@ package com.github.tvbox.osc.api;
 import static com.github.tvbox.osc.util.RegexUtils.getPattern;
 
 import android.app.Activity;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Base64;
+import android.widget.Toast;
 
 import com.github.catvod.crawler.JarLoader;
 import com.github.catvod.crawler.JsLoader;
@@ -30,6 +33,7 @@ import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.M3u8;
 import com.github.tvbox.osc.util.MD5;
 import com.github.tvbox.osc.util.OkGoHelper;
+import com.github.tvbox.osc.util.PrivateUtils;
 import com.github.tvbox.osc.util.VideoParseRuler;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -37,9 +41,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.lzy.okgo.OkGo;
 import com.lzy.okgo.callback.AbsCallback;
+import com.lzy.okgo.model.HttpHeaders;
 import com.lzy.okgo.model.Response;
 import com.orhanobut.hawk.Hawk;
 
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -88,6 +95,9 @@ public class ApiConfig {
     private final String requestAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9";
 
     private String defaultLiveObjString="{\"lives\":[{\"name\":\"txt_m3u\",\"type\":0,\"url\":\"txt_m3u_url\"}]}";
+
+    SharedPreferences prefs  = App.getInstance().getSharedPreferences("WJYS1", Context.MODE_PRIVATE);
+
     private ApiConfig() {
         clearLoader();
         sourceBeanList = new LinkedHashMap<>();
@@ -474,6 +484,8 @@ public class ApiConfig {
         vipParseFlags = DefaultConfig.safeJsonStringList(infoJson, "flags");
         // 解析地址
         parseBeanList.clear();
+        // 增加默认解析地址
+        addDefaultParse();
         if(infoJson.has("parses")){
             JsonArray parses = infoJson.get("parses").getAsJsonArray();
             for (JsonElement opt : parses) {
@@ -1112,5 +1124,48 @@ public class ApiConfig {
         jarLoader.clear();
         pyLoader.clear();
         jsLoader.clear();
+    }
+
+    private void addDefaultParse(){
+        HttpHeaders reqHeaders = new HttpHeaders();
+        String token = prefs.getString("token","default");
+        OkGo.<String>get("http://47.108.190.232:666/api/main/init")
+                .params("time", "time")
+                .params("token", token)
+                .params("apk_mark", "lvdou-box-ui-6")
+                .params("app_id", "95210")
+                .tag("addDefaultParse")
+                .headers(reqHeaders)
+                .execute(new AbsCallback<String>() {
+                    @Override
+                    public String convertResponse(okhttp3.Response response) throws Throwable {
+                        if (response.body() != null) {
+                            return response.body().string();
+                        } else {
+                            throw new IllegalStateException("网络请求错误");
+                        }
+                    }
+
+                    public void onSuccess(Response response) {
+                        String text = response.body().toString();
+                        JSONObject resultObj;
+                        try {
+                            resultObj =  new JSONObject(PrivateUtils.encode(text));
+                            JSONObject dataObj = resultObj.getJSONObject("data");
+                            JSONArray parsesConfigObjArray = dataObj.getJSONArray("parsesConfig");
+                            for(int i=0;i<parsesConfigObjArray.length();i++){
+                                JSONObject json = parsesConfigObjArray.getJSONObject(i);
+                                ParseBean sb = new ParseBean();
+                                sb.setName(json.getString("name"));
+                                sb.setUrl(json.getString("url"));
+                                sb.setType(5);
+                                parseBeanList.add(sb);
+                            }
+
+                        } catch (JSONException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
     }
 }
